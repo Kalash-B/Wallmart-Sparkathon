@@ -55,8 +55,13 @@ const Sales = () => {
       return;
     }
 
+    const storeEntry = selectedProduct.stores?.[0]; // assuming 1 store per product
+
     const saleData = {
-      productId: formData.productId,
+      productId: selectedProduct._id,
+      productName: selectedProduct.name,
+      storeId: storeEntry?._id || "store-001", // fallback if no _id
+      storeName: storeEntry?.storeName || "Default Store",
       quantity: parseInt(formData.quantity),
       date: formData.date,
     };

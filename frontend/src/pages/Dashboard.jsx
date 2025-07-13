@@ -2,7 +2,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import StatCard from "../components/StatCard";
 import ChartCard from "../components/ChartCard";
-import { getProducts, getDeadInventory, getSalesHistory } from "../services/api";
+import {
+  getProducts,
+  getDeadInventory,
+  getSalesHistory,
+} from "../services/api";
 
 import {
   Chart,
@@ -38,6 +42,8 @@ const Dashboard = () => {
   const heatmapChartRef = useRef(null);
   const salesChartInstance = useRef(null);
   const heatmapChartInstance = useRef(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const [products, setProducts] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -47,14 +53,34 @@ const Dashboard = () => {
   const [deadInventory, setDeadInventory] = useState([]);
   const [salesHistory, setSalesHistory] = useState([]);
 
+  const filteredProducts = products.filter((product) => {
+    return (
+      (searchTerm === "" ||
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.SKU.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (categoryFilter === "" || product.category === categoryFilter) &&
+      (!lowStockOnly || product.stock < 10)
+    );
+  });
+
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, categoryFilter, lowStockOnly]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [productResponse, deadInventoryResponse, salesResponse] = await Promise.all([
-          getProducts(),
-          getDeadInventory(),
-          getSalesHistory()
-        ]);
+        const [productResponse, deadInventoryResponse, salesResponse] =
+          await Promise.all([
+            getProducts(),
+            getDeadInventory(),
+            getSalesHistory(),
+          ]);
 
         const productList = productResponse.data.map((product) => ({
           ...product,
@@ -89,7 +115,7 @@ const Dashboard = () => {
     if (salesChartRef.current) {
       const monthlySales = Array(12).fill(0);
 
-      salesData.forEach(sale => {
+      salesData.forEach((sale) => {
         const month = new Date(sale.date).getMonth();
         monthlySales[month] += sale.quantity;
       });
@@ -98,8 +124,18 @@ const Dashboard = () => {
         type: "line",
         data: {
           labels: [
-            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
           ],
           datasets: [
             {
@@ -170,16 +206,6 @@ const Dashboard = () => {
       });
     }
   };
-
-  const filteredProducts = products.filter((product) => {
-    return (
-      (searchTerm === "" ||
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.SKU.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (categoryFilter === "" || product.category === categoryFilter) &&
-      (!lowStockOnly || product.stock < 10)
-    );
-  });
 
   const categories = [...new Set(products.map((p) => p.category))];
 
@@ -307,8 +333,8 @@ const Dashboard = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredProducts.length > 0 ? (
-                  filteredProducts.map((product) => (
+                {paginatedProducts.length > 0 ? (
+                  paginatedProducts.map((product) => (
                     <tr
                       key={product.id}
                       className={product.stock < 10 ? "low-stock" : ""}
@@ -355,48 +381,55 @@ const Dashboard = () => {
                 )}
               </tbody>
             </table>
+            {filteredProducts.length > itemsPerPage && (
+              <div className="flex justify-center p-4 space-x-2">
+                {Array.from({
+                  length: Math.ceil(filteredProducts.length / itemsPerPage),
+                }).map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i + 1)}
+                    className={`px-3 py-1 rounded-md ${
+                      currentPage === i + 1
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* Dead Stock Preview */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="p-4 border-b">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium text-gray-800">
-              Dead Stock Items
-            </h3>
-            <button
-              className="text-indigo-600 hover:text-indigo-800"
-              onClick={() =>
-                document.getElementById("deadInventoryTab")?.click()
-              }
-            >
-              See All <i className="fas fa-arrow-right ml-1"></i>
-            </button>
-          </div>
-        </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Product
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Days Without Sale
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Stock
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Suggested Action
+              </th>
+            </tr>
+          </thead>
+        </table>
 
-        <div className="overflow-x-auto">
+        {/* Scrollable Body */}
+        <div className="max-h-64 overflow-y-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Product
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Days Without Sale
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Stock
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Suggested Action
-                </th>
-              </tr>
-            </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {deadInventory.slice(0, 3).map((item) => (
+              {deadInventory.map((item) => (
                 <tr key={item._id}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="font-medium text-gray-900">{item.name}</div>

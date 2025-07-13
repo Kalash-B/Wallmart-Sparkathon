@@ -14,33 +14,49 @@ exports.getAllProducts = async (req, res) => {
 // POST create new product
 
 exports.createProduct = async (req, res) => {
-  const { name, SKU, category, price, description, stock } = req.body;
-
-  if (!name || !SKU || !category || price == null || stock == null) {
-    return res.status(400).json({ message: 'All fields are required' });
-  }
-
   try {
+    const { name, SKU, category, price, description, stock, stores } = req.body;
+
+    if (!name || !SKU || !category || price == null) {
+      return res.status(400).json({ message: 'Required fields missing' });
+    }
+
+    let storeData;
+
+    if (Array.isArray(stores)) {
+      // from CSV or manual UI with custom lastSoldDate
+      storeData = stores;
+    } else {
+      // fallback: use `stock` field if present (for backward compatibility)
+      if (stock == null) {
+        return res.status(400).json({ message: 'Stock or Stores required' });
+      }
+
+      storeData = [
+        {
+          storeName: 'Default Store',
+          location: 'Main Warehouse',
+          quantity: stock,
+          lastSoldDate: new Date('2024-01-01'), // default date
+        },
+      ];
+    }
+
     const product = await Product.create({
       name,
       SKU,
       category,
       price,
       description,
-      stores: [
-        {
-          storeName: "Default Store",
-          location: "Main Warehouse",
-          quantity: stock
-        }
-      ]
+      stores: storeData,
     });
+
     res.status(201).json(product);
   } catch (err) {
+    console.error("Create product error:", err.message);
     res.status(500).json({ message: err.message });
   }
 };
-
 
 
 // PUT update product by ID

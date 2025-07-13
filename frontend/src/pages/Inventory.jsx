@@ -11,18 +11,25 @@ import {
 const Inventory = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editProductId, setEditProductId] = useState(null);
-
   const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortKey, setSortKey] = useState(null);
   const [sortOrder, setSortOrder] = useState("asc");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, sortKey, sortOrder]);
+
   const [newProduct, setNewProduct] = useState({
     name: "",
     SKU: "",
     category: "",
     price: "",
     stock: "",
+    lastSoldDate: new Date().toISOString().split("T")[0], // YYYY-MM-DD
   });
 
   useEffect(() => {
@@ -32,7 +39,13 @@ const Inventory = () => {
   const fetchProducts = async () => {
     try {
       const res = await getProducts();
-      setProducts(res.data);
+      const updated = res.data.map((product) => ({
+        ...product,
+        stock:
+          product.stores?.reduce((sum, store) => sum + store.quantity, 0) || 0,
+      }));
+
+      setProducts(updated);
     } catch (error) {
       console.error("Error fetching products:", error);
     }
@@ -86,6 +99,14 @@ const Inventory = () => {
     return filtered;
   }, [products, searchTerm, sortKey, sortOrder]);
 
+  const totalPages = Math.ceil(filteredAndSorted.length / itemsPerPage);
+
+  const currentItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredAndSorted.slice(startIndex, endIndex);
+  }, [filteredAndSorted, currentPage]);
+
   const handleExport = () => {
     const csv = Papa.unparse(products);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -99,27 +120,45 @@ const Inventory = () => {
         header: true,
         skipEmptyLines: true,
         complete: async (results) => {
+          const fields = results.meta.fields;
           if (
-            !results.meta.fields.includes("name") ||
-            !results.meta.fields.includes("price") ||
-            !results.meta.fields.includes("stock")
+            !fields.includes("name") ||
+            !fields.includes("price") ||
+            !fields.includes("stock") ||
+            !fields.includes("lastSoldDate")
           ) {
-            console.error("CSV must include 'name', 'price', and 'stock'");
+            console.error(
+              "CSV must include 'name', 'price', 'stock', and 'lastSoldDate'"
+            );
             return;
           }
 
           for (const row of results.data) {
-            const parsed = {
-              ...row,
+            const payload = {
+              name: row.name,
+              SKU: row.SKU,
+              category: row.category || "General",
               price: parseFloat(row.price),
-              stock: parseInt(row.stock, 10),
+              description: "N/A",
+              stores: [
+                {
+                  storeName: "Default Store",
+                  location: "Main Warehouse",
+                  quantity: parseInt(row.stock, 10),
+                  lastSoldDate: new Date(row.lastSoldDate),
+                },
+              ],
             };
 
-            if (!parsed.name || isNaN(parsed.price) || isNaN(parsed.stock))
+            if (
+              !payload.name ||
+              isNaN(payload.price) ||
+              isNaN(payload.stores[0].quantity)
+            )
               continue;
 
             try {
-              const res = await addProduct(parsed);
+              const res = await addProduct(payload);
               setProducts((prev) => [...prev, res.data]);
             } catch (err) {
               console.error("Failed to import product:", err);
@@ -132,6 +171,7 @@ const Inventory = () => {
 
   const handleAddProduct = async (e) => {
     e.preventDefault();
+
     const payload = {
       name: newProduct.name,
       SKU: newProduct.SKU,
@@ -142,7 +182,8 @@ const Inventory = () => {
         {
           storeName: "Default Store",
           location: "Main Warehouse",
-          quantity: parseInt(newProduct.stock, 10),
+          quantity: parseInt(newProduct.stock),
+          lastSoldDate: new Date(newProduct.lastSoldDate),
         },
       ],
     };
@@ -157,7 +198,15 @@ const Inventory = () => {
         const res = await addProduct(payload);
         setProducts((prev) => [...prev, res.data]);
       }
-      setNewProduct({ name: "", SKU: "", category: "", price: "", stock: "" });
+
+      setNewProduct({
+        name: "",
+        SKU: "",
+        category: "",
+        price: "",
+        stock: "",
+        lastSoldDate: new Date().toISOString().split("T")[0],
+      });
       setIsEditing(false);
       setEditProductId(null);
       setShowAddForm(false);
@@ -175,6 +224,9 @@ const Inventory = () => {
       category: product.category,
       price: product.price,
       stock: product.stores?.[0]?.quantity ?? 0,
+      lastSoldDate: new Date(product.stores?.[0]?.lastSoldDate)
+        .toISOString()
+        .split("T")[0],
     });
     setShowAddForm(true);
   };
@@ -216,7 +268,7 @@ const Inventory = () => {
       {showAddForm && (
         <form
           onSubmit={handleAddProduct}
-          className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4"
+          className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4"
         >
           <input
             type="text"
@@ -268,9 +320,17 @@ const Inventory = () => {
             className="border rounded px-2 py-1"
             required
           />
+          <input
+            type="date"
+            value={newProduct.lastSoldDate}
+            onChange={(e) =>
+              setNewProduct({ ...newProduct, lastSoldDate: e.target.value })
+            }
+            className="border rounded px-2 py-1"
+          />
           <button
             type="submit"
-            className="md:col-span-5 bg-indigo-600 text-white px-4 py-2 rounded"
+            className="md:col-span-6 bg-indigo-600 text-white px-4 py-2 rounded"
           >
             {isEditing ? "Update" : "Add"}
           </button>
@@ -310,8 +370,8 @@ const Inventory = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredAndSorted.map((product) => {
-              const status = getStatus(product.stock);
+            {currentItems.map((product) => {
+              const status = getStatus(product.stores);
               return (
                 <tr key={product._id}>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -329,14 +389,11 @@ const Inventory = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        getStatus(product.stores).class
-                      }`}
+                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${status.class}`}
                     >
-                      {getStatus(product.stores).label}
+                      {status.label}
                     </span>
                   </td>
-
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       className="text-indigo-600 hover:text-indigo-900 mr-2"
@@ -344,7 +401,6 @@ const Inventory = () => {
                     >
                       <i className="fas fa-edit">Edit</i>
                     </button>
-
                     <button
                       className="text-red-600 hover:text-red-900"
                       onClick={() => handleDelete(product._id)}
@@ -357,6 +413,39 @@ const Inventory = () => {
             })}
           </tbody>
         </table>
+        <div className="flex justify-center mt-4 gap-2">
+          <button
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+          >
+            Prev
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentPage(i + 1)}
+              className={`px-3 py-1 rounded ${
+                currentPage === i + 1
+                  ? "bg-indigo-600 text-white"
+                  : "bg-gray-200"
+              }`}
+            >
+              {i + 1}
+            </button>
+          ))}
+
+          <button
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+            }
+            disabled={currentPage === totalPages}
+            className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   );
