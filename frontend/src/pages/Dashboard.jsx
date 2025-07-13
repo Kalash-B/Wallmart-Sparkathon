@@ -246,7 +246,7 @@ const Dashboard = () => {
           bgColor="bg-red-100"
           iconColor="text-red-600"
           label="Dead Stock"
-          value={4}
+          value={deadInventory.length}
         />
       </div>
 
