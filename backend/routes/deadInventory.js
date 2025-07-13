@@ -4,7 +4,7 @@ const Product = require('../models/Product');
 
 router.get('/', async (req, res) => {
   try {
-    const THRESHOLD_DAYS = 180;
+    const THRESHOLD_DAYS = 30;
     const now = new Date();
 
     const products = await Product.find();
@@ -23,11 +23,16 @@ router.get('/', async (req, res) => {
         deadInventory.push({
           _id: product._id,
           name: product.name,
+          SKU: product.SKU,
           category: product.category,
-          stock: store.quantity,
           daysWithoutSale,
+          stock: store.quantity,
           estimatedValue,
-          aiSuggestedAction
+          suggestedActions: [
+            { id: 1, action: aiSuggestedAction, impact: 'High' },
+            { id: 2, action: 'Transfer to another store', impact: 'Medium' },
+            { id: 3, action: 'Online promotion campaign', impact: 'Low' }
+          ]
         });
       }
     }
@@ -39,3 +44,4 @@ router.get('/', async (req, res) => {
 });
 
 module.exports = router;
+

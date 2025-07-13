@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import StatCard from "../components/StatCard";
 import ChartCard from "../components/ChartCard";
-import { getProducts, addProduct, updateProduct, deleteProduct } from "../services/api";
+import { getProducts, getDeadInventory, getSalesHistory } from "../services/api";
 
 import {
   Chart,
@@ -44,20 +44,31 @@ const Dashboard = () => {
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [deadInventory, setDeadInventory] = useState([]);
+  const [salesHistory, setSalesHistory] = useState([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await getProducts();
-        const productList = response.data.map((product) => ({
+        const [productResponse, deadInventoryResponse, salesResponse] = await Promise.all([
+          getProducts(),
+          getDeadInventory(),
+          getSalesHistory()
+        ]);
+
+        const productList = productResponse.data.map((product) => ({
           ...product,
           id: product._id,
           stock: product.stores.reduce((sum, store) => sum + store.quantity, 0),
         }));
+
         setProducts(productList);
-        initializeCharts();
+        setDeadInventory(deadInventoryResponse.data || []);
+        setSalesHistory(salesResponse.data || []);
+
+        initializeCharts(salesResponse.data || []);
       } catch (error) {
-        console.error("Error fetching products:", error);
+        console.error("Error fetching dashboard data:", error);
       } finally {
         setLoading(false);
       }
@@ -71,19 +82,29 @@ const Dashboard = () => {
     };
   }, []);
 
-  const initializeCharts = () => {
+  const initializeCharts = (salesData) => {
     salesChartInstance.current?.destroy();
     heatmapChartInstance.current?.destroy();
 
     if (salesChartRef.current) {
+      const monthlySales = Array(12).fill(0);
+
+      salesData.forEach(sale => {
+        const month = new Date(sale.date).getMonth();
+        monthlySales[month] += sale.quantity;
+      });
+
       salesChartInstance.current = new Chart(salesChartRef.current, {
         type: "line",
         data: {
-          labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+          labels: [
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+          ],
           datasets: [
             {
               label: "Sales",
-              data: [65, 59, 80, 81, 56, 90],
+              data: monthlySales,
               borderColor: "rgb(79, 70, 229)",
               backgroundColor: "rgba(79, 70, 229, 0.1)",
               fill: true,
@@ -199,7 +220,7 @@ const Dashboard = () => {
           bgColor="bg-red-100"
           iconColor="text-red-600"
           label="Dead Stock"
-          value={2}
+          value={4}
         />
       </div>
 
@@ -348,7 +369,7 @@ const Dashboard = () => {
             <button
               className="text-indigo-600 hover:text-indigo-800"
               onClick={() =>
-                document.getElementById("deadInventoryTab").click()
+                document.getElementById("deadInventoryTab")?.click()
               }
             >
               See All <i className="fas fa-arrow-right ml-1"></i>
@@ -364,10 +385,10 @@ const Dashboard = () => {
                   Product
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Sale
+                  Days Without Sale
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Qty In Stock
+                  Stock
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Suggested Action
@@ -375,42 +396,25 @@ const Dashboard = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              <tr>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="font-medium text-gray-900">Ceramic Mug</div>
-                  <div className="text-sm text-gray-500">CM-003</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  45 days ago
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  3 units
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                    Bundle with coffee beans
-                  </span>
-                </td>
-              </tr>
-              <tr>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="font-medium text-gray-900">
-                    Protein Powder
-                  </div>
-                  <div className="text-sm text-gray-500">PP-005</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  38 days ago
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  6 units
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                    Flash sale (approaching expiry)
-                  </span>
-                </td>
-              </tr>
+              {deadInventory.slice(0, 3).map((item) => (
+                <tr key={item._id}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="font-medium text-gray-900">{item.name}</div>
+                    <div className="text-sm text-gray-500">{item.SKU}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {item.daysWithoutSale} days
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {item.stock} units
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                      {item.suggestedActions?.[0]?.action || "-"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

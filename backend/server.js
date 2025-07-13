@@ -25,6 +25,10 @@ app.use('/api/products', productRoutes);
 const deadInventoryRoutes = require('./routes/deadInventory');
 app.use('/api/dead-inventory', deadInventoryRoutes);
 
+const salesRoutes = require('./routes/sales');
+app.use('/api/sales', salesRoutes);
+
+
 
 // Sample route
 app.get("/", (req, res) => {

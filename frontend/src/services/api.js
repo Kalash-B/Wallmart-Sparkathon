@@ -13,5 +13,9 @@ export const deleteProduct = (id) => API.delete(`/products/${id}`);
 // Dead Inventory
 export const getDeadInventory = () => API.get('/dead-inventory');
 
+// ✅ Add this function for sales history
+export const getSalesHistory = () => API.get('/sales');
+export const addSale = (data) => API.post('/sales', data);
+
 
 export default API;

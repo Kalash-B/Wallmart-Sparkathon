@@ -97,13 +97,27 @@ const Inventory = () => {
     if (file) {
       Papa.parse(file, {
         header: true,
+        skipEmptyLines: true,
         complete: async (results) => {
+          if (
+            !results.meta.fields.includes("name") ||
+            !results.meta.fields.includes("price") ||
+            !results.meta.fields.includes("stock")
+          ) {
+            console.error("CSV must include 'name', 'price', and 'stock'");
+            return;
+          }
+
           for (const row of results.data) {
             const parsed = {
               ...row,
               price: parseFloat(row.price),
               stock: parseInt(row.stock, 10),
             };
+
+            if (!parsed.name || isNaN(parsed.price) || isNaN(parsed.stock))
+              continue;
+
             try {
               const res = await addProduct(parsed);
               setProducts((prev) => [...prev, res.data]);
