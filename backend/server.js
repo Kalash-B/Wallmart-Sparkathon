@@ -18,6 +18,14 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+// Routes
+const productRoutes = require('./routes/products'); // ✅ create this file as shown earlier
+app.use('/api/products', productRoutes);
+
+const deadInventoryRoutes = require('./routes/deadInventory');
+app.use('/api/dead-inventory', deadInventoryRoutes);
+
+
 // Sample route
 app.get("/", (req, res) => {
   res.send("Backend is running!");
@@ -38,7 +46,7 @@ io.on("connection", (socket) => {
 });
 
 // MongoDB connection
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/myapp";
+const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/smart_inventory";
 
 mongoose
   .connect(MONGO_URI)

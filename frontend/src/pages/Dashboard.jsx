@@ -1,7 +1,8 @@
-// Dashboard Page
+// Dashboard Page (Updated with Backend Integration)
 import React, { useEffect, useRef, useState } from "react";
 import StatCard from "../components/StatCard";
 import ChartCard from "../components/ChartCard";
+import { getProducts, addProduct, updateProduct, deleteProduct } from "../services/api";
 
 import {
   Chart,
@@ -18,7 +19,6 @@ import {
   Filler,
 } from "chart.js";
 
-// Register required chart.js components
 Chart.register(
   LineController,
   LineElement,
@@ -32,75 +32,49 @@ Chart.register(
   Legend,
   Filler
 );
+
 const Dashboard = () => {
   const salesChartRef = useRef(null);
   const heatmapChartRef = useRef(null);
   const salesChartInstance = useRef(null);
   const heatmapChartInstance = useRef(null);
 
-  const [products, setProducts] = React.useState([]);
-  const [categoryFilter, setCategoryFilter] = React.useState("");
-  const [lowStockOnly, setLowStockOnly] = React.useState(false);
-  const [searchTerm, setSearchTerm] = React.useState("");
-  const [loading, setLoading] = React.useState(true);
+  const [products, setProducts] = useState([]);
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setTimeout(() => {
-      const mockProducts = [
-        {
-          id: 1,
-          name: "Wireless Headphones",
-          sku: "WH-001",
-          category: "Electronics",
-          stock: 15,
-        },
-        {
-          id: 2,
-          name: "Cotton T-Shirt",
-          sku: "CT-002",
-          category: "Apparel",
-          stock: 8,
-        },
-        {
-          id: 3,
-          name: "Ceramic Mug",
-          sku: "CM-003",
-          category: "Kitchenware",
-          stock: 3,
-        },
-        {
-          id: 4,
-          name: "Desk Lamp",
-          sku: "DL-004",
-          category: "Home Goods",
-          stock: 12,
-        },
-        {
-          id: 5,
-          name: "Protein Powder",
-          sku: "PP-005",
-          category: "Health",
-          stock: 6,
-        },
-      ];
-      setProducts(mockProducts);
-      setLoading(false);
-      initializeCharts();
-    }, 500);
+    const fetchData = async () => {
+      try {
+        const response = await getProducts();
+        const productList = response.data.map((product) => ({
+          ...product,
+          id: product._id,
+          stock: product.stores.reduce((sum, store) => sum + store.quantity, 0),
+        }));
+        setProducts(productList);
+        initializeCharts();
+      } catch (error) {
+        console.error("Error fetching products:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
 
     return () => {
-      // Cleanup existing charts on unmount
       salesChartInstance.current?.destroy();
       heatmapChartInstance.current?.destroy();
     };
   }, []);
 
   const initializeCharts = () => {
-    // Destroy old instances if they exist
     salesChartInstance.current?.destroy();
     heatmapChartInstance.current?.destroy();
 
-    // Sales Trend Line Chart
     if (salesChartRef.current) {
       salesChartInstance.current = new Chart(salesChartRef.current, {
         type: "line",
@@ -132,7 +106,6 @@ const Dashboard = () => {
       });
     }
 
-    // Inventory Heatmap (Bar) Chart
     if (heatmapChartRef.current) {
       heatmapChartInstance.current = new Chart(heatmapChartRef.current, {
         type: "bar",
@@ -181,7 +154,7 @@ const Dashboard = () => {
     return (
       (searchTerm === "" ||
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.sku.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        product.SKU.toLowerCase().includes(searchTerm.toLowerCase())) &&
       (categoryFilter === "" || product.category === categoryFilter) &&
       (!lowStockOnly || product.stock < 10)
     );
@@ -325,7 +298,7 @@ const Dashboard = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {product.sku}
+                        {product.SKU}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {product.category}
@@ -445,4 +418,5 @@ const Dashboard = () => {
     </div>
   );
 };
+
 export default Dashboard;
